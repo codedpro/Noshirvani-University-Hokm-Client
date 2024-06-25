@@ -26,7 +26,7 @@ public class LoginSignUpPage {
 
         JLabel imageLabel = new JLabel();
         try {
-            ImageIcon imageIcon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/assets/HOKM3.png")));
+            ImageIcon imageIcon = new ImageIcon(Objects.requireNonNull(getClass().getResource("/data/HOKM3.png")));
             imageLabel.setIcon(imageIcon);
         } catch (NullPointerException e) {
             LOGGER.log(Level.SEVERE, "Image resource not found: /assets/HOKM3.png", e);
