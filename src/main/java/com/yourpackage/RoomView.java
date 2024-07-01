@@ -210,7 +210,7 @@ public class RoomView {
                 } else {
                     imagePath = "/data/nullplayer.png";
                 }
-
+//test
                 boolean isTeamA = i < maxPlayers / 2;
                 JPanel teamPanel = isTeamA ? teamAPanel : teamBPanel;
                 int yOffset = (isTeamA ? i : i - maxPlayers / 2) * (maxPlayers == 2 ? 58 : 58);
