@@ -15,14 +15,27 @@ public class Room implements Serializable {
     private final List<String> players;
     private final transient List<ObjectOutputStream> clientStreams;
     private final int maxPlayers;
+    private boolean isGameStarted;
 
     public Room(String creator, int maxPlayers) {
         this.creator = creator;
         this.maxPlayers = maxPlayers;
         this.players = new ArrayList<>();
         this.clientStreams = new ArrayList<>();
+        this.isGameStarted = false; // Initialize the flag
         if (creator != null) {
             this.players.add(creator);
+        }
+    }
+
+    public boolean isGameStarted() {
+        return isGameStarted;
+    }
+
+    public synchronized void startGame() {
+        if (!isGameStarted) {
+            this.isGameStarted = true;
+            broadcastMessage("START_GAME");
         }
     }
 

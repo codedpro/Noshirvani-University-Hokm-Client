@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
@@ -161,7 +162,15 @@ public class RoomView {
                         Object received = in.readObject();
                         if (received instanceof String message) {
                             LOGGER.info("Received message: " + message);
-                            if ("KICKED".equals(message)) {
+                            if (message.startsWith("START_GAME:")) {
+                                // Extract teams from the message
+                                String[] parts = message.split(":");
+                                List<String> teamA = List.of(parts[1].split(","));
+                                List<String> teamB = List.of(parts[2].split(","));
+                                SwingUtilities.invokeLater(() -> new GameUI(username, roomCreator, out, in, socket, teamA, teamB));
+                                frame.dispose();
+                                break;
+                            } else if ("KICKED".equals(message)) {
                                 JOptionPane.showMessageDialog(frame, "You have been kicked from the room.", "Kicked", JOptionPane.WARNING_MESSAGE);
                                 closeRoom();
                                 break;
@@ -182,6 +191,7 @@ public class RoomView {
                     LOGGER.log(Level.SEVERE, "Error in chat message handling", e);
                 }
             }).start();
+
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Error setting up connection", e);
         }
@@ -210,7 +220,7 @@ public class RoomView {
                 } else {
                     imagePath = "/data/nullplayer.png";
                 }
-//test
+
                 boolean isTeamA = i < maxPlayers / 2;
                 JPanel teamPanel = isTeamA ? teamAPanel : teamBPanel;
                 int yOffset = (isTeamA ? i : i - maxPlayers / 2) * (maxPlayers == 2 ? 58 : 58);
@@ -320,7 +330,24 @@ public class RoomView {
     }
 
     private void startGame() {
-        sendRequest("CHAT:" + roomCreator + ":" + username + ":Game Started");
+        List<String> teamA = new ArrayList<>();
+        List<String> teamB = new ArrayList<>();
+
+        for (Component component : teamAPanel.getComponents()) {
+            if (component instanceof JPanel userPanel) {
+                JLabel nameLabel = (JLabel) userPanel.getComponent(1);
+                teamA.add(nameLabel.getText());
+            }
+        }
+
+        for (Component component : teamBPanel.getComponents()) {
+            if (component instanceof JPanel userPanel) {
+                JLabel nameLabel = (JLabel) userPanel.getComponent(1);
+                teamB.add(nameLabel.getText());
+            }
+        }
+
+        sendRequest("START_GAME:" + roomCreator + ":" + username + ":" + String.join(",", teamA) + ":" + String.join(",", teamB));
     }
 
     private void sendRequest(String request) {

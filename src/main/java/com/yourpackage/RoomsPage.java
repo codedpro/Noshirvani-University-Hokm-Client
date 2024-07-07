@@ -87,14 +87,11 @@
                  ObjectOutputStream out = new ObjectOutputStream(socket.getOutputStream());
                  ObjectInputStream in = new ObjectInputStream(socket.getInputStream())) {
 
-                LOGGER.info("Sending request to fetch rooms");
                 out.writeObject("GET_ROOMS");
                 out.flush();
-                LOGGER.info("Request sent: GET_ROOMS");
 
-                LOGGER.info("Waiting to receive room list from server...");
                 List<Room> rooms = (List<Room>) in.readObject();
-                LOGGER.info("Received room list from server");
+
 
                 roomsPanel.removeAll();
 
