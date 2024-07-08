@@ -163,7 +163,7 @@ public class RoomView {
                         if (received instanceof String message) {
                             LOGGER.info("Received message: " + message);
                             if (message.startsWith("START_GAME:")) {
-                                // Extract teams from the message
+
                                 String[] parts = message.split(":");
                                 List<String> teamA = List.of(parts[1].split(","));
                                 List<String> teamB = List.of(parts[2].split(","));
@@ -172,7 +172,7 @@ public class RoomView {
                                 break;
                             } else if ("KICKED".equals(message)) {
                                 JOptionPane.showMessageDialog(frame, "You have been kicked from the room.", "Kicked", JOptionPane.WARNING_MESSAGE);
-                                closeRoom(); // Ensure the room is closed and resources are cleaned up
+                                closeRoom();
                                 break;
                             } else if ("ROOM_CLOSED".equals(message)) {
                                 JOptionPane.showMessageDialog(frame, "The room has been closed by the creator.", "Room Closed", JOptionPane.INFORMATION_MESSAGE);
@@ -225,7 +225,7 @@ public class RoomView {
                 }
             }
 
-            // If the number of users is odd, add an empty player to the smaller team
+
             if (teamA.size() < teamB.size()) {
                 teamA.add("Empty Player");
             } else if (teamB.size() < teamA.size()) {

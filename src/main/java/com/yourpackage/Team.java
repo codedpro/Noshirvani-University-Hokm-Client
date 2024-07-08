@@ -46,4 +46,12 @@ public class Team implements Serializable {
             score--;
         }
     }
+
+    public boolean contains(String player) {
+        return players.contains(player);
+    }
+
+    public int indexOf(String player) {
+        return players.indexOf(player);
+    }
 }
