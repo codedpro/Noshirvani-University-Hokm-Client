@@ -29,14 +29,15 @@ public class Room implements Serializable {
     public Room(String creator, int maxPlayers, int totalRounds) {
         this.creator = creator;
         this.maxPlayers = maxPlayers;
+        this.totalRounds = totalRounds;
         this.players = new ArrayList<>();
         this.clientStreams = new ArrayList<>();
         this.isGameStarted = false;
         this.teamA = new ArrayList<>();
         this.teamB = new ArrayList<>();
-        this.totalRounds = totalRounds;
-        this.currentRound = 0;
         this.deck = new Deck();
+        this.currentRound = 0;
+        this.currentPlayerIndex = 0;
     }
 
     private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
@@ -61,45 +62,14 @@ public class Room implements Serializable {
     }
 
     public synchronized void closeRoom() {
-        for (ObjectOutputStream out : clientStreams) {
-            try {
-                out.writeObject("ROOM_CLOSED");
-                out.flush();
-                out.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+        broadcastMessage("ROOM_CLOSED");
+        closeAllConnections();
         clientStreams.clear();
         players.clear();
     }
 
     public List<String> getTeamA() {
         return teamA;
-    }
-
-    public synchronized boolean removePlayer(String username) {
-        Player playerToRemove = null;
-        for (Player player : players) {
-            if (player.getName().equals(username)) {
-                playerToRemove = player;
-                break;
-            }
-        }
-        if (playerToRemove != null) {
-            players.remove(playerToRemove);
-            clientStreams.remove(playerToRemove.getOutputStream());
-            try {
-                playerToRemove.getOutputStream().writeObject("KICKED");
-                playerToRemove.getOutputStream().flush();
-                playerToRemove.closeConnections();
-            } catch (IOException e) {
-                LOGGER.log(Level.SEVERE, "Error notifying player of kick", e);
-            }
-            broadcastUserList();
-            return true;
-        }
-        return false;
     }
 
     public List<String> getTeamB() {
@@ -111,33 +81,57 @@ public class Room implements Serializable {
     }
 
     public Player getPlayerByName(String username) {
-        for (Player player : players) {
-            if (player.getName().equals(username)) {
-                return player;
-            }
-        }
-        return null;
+        return players.stream().filter(p -> p.getName().equals(username)).findFirst().orElse(null);
     }
 
-    public synchronized void notifyKickUser(String username) {
-        Player kickedPlayer = getPlayerByName(username);
-        if (kickedPlayer != null) {
-            try {
-                kickedPlayer.getOutputStream().writeObject("KICKED");
-                kickedPlayer.getOutputStream().flush();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                kickedPlayer.closeConnections();
-            }
+    public synchronized boolean removePlayer(String username) {
+        Player player = getPlayerByName(username);
+        if (player != null) {
+            players.remove(player);
+            clientStreams.remove(player.getOutputStream());
+            notifyPlayerKicked(player);
+            broadcastUserList();
+            return true;
+        }
+        return false;
+    }
+
+    public synchronized void addPlayer(Player player) {
+        if (!isFull() && players.stream().noneMatch(p -> p.getName().equals(player.getName()))) {
+            players.add(player);
+            clientStreams.add(player.getOutputStream());
+            addPlayerToTeam(player);
+            broadcastMessage(player.getName() + " has joined the room.");
+            broadcastUserList();
+        }
+    }
+
+    public synchronized void addClientStream(ObjectOutputStream out) {
+        clientStreams.add(out);
+    }
+
+    public synchronized List<ObjectOutputStream> getClientStreams() {
+        return new ArrayList<>(clientStreams);
+    }
+
+    private void addPlayerToTeam(Player player) {
+        if (teamA.size() <= teamB.size()) {
+            teamA.add(player.getName());
+        } else {
+            teamB.add(player.getName());
         }
     }
 
     public synchronized void startGame() {
         if (!isGameStarted && players.size() == maxPlayers) {
             this.isGameStarted = true;
+            LOGGER.info("Starting game with " + maxPlayers + " players");
+            deck = new Deck();
             selectMaster();
-            notifyMasterToPickHokem();
+            dealInitialCards();
+            notifyMasterToPickHokm();
+        } else {
+            broadcastMessage("START_GAME_FAILED");
         }
     }
 
@@ -147,13 +141,8 @@ public class Room implements Serializable {
         broadcastMessage("MASTER_SELECTED:" + master.getName());
     }
 
-    private void notifyMasterToPickHokem() {
-        try {
-            master.getOutputStream().writeObject("SELECT_HOKEM");
-            master.getOutputStream().flush();
-        } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Error notifying master to pick Hokem", e);
-        }
+    private void notifyMasterToPickHokm() {
+        sendMessageToPlayer(master, "SELECT_HOKM");
     }
 
     public synchronized void setHokmSuit(String hokmSuit) {
@@ -164,32 +153,23 @@ public class Room implements Serializable {
     }
 
     private void dealInitialCards() {
-        for (Player player : players) {
-            List<Card> initialCards = new ArrayList<>();
-            for (int i = 0; i < 5; i++) {
-                initialCards.add(deck.drawCard());
-            }
+        players.forEach(player -> {
+            List<Card> initialCards = deck.drawCards(5);
             player.setHand(initialCards);
             sendCardsToPlayer(player);
-        }
-    }
-
-    private void sendCardsToPlayer(Player player) {
-        try {
-            player.getOutputStream().writeObject("DEAL_CARDS:" + player.getHand());
-            player.getOutputStream().flush();
-        } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Error sending cards to player", e);
-        }
+        });
     }
 
     private void dealRemainingCards() {
-        for (Player player : players) {
-            while (player.getHand().size() < 13) {
-                player.getHand().add(deck.drawCard());
-            }
+        players.forEach(player -> {
+            List<Card> remainingCards = deck.drawCards(13 - player.getHand().size());
+            player.getHand().addAll(remainingCards);
             sendCardsToPlayer(player);
-        }
+        });
+    }
+
+    private void sendCardsToPlayer(Player player) {
+        sendMessageToPlayer(player, "DEAL_CARDS:" + player.getHand());
     }
 
     private void startRound() {
@@ -217,12 +197,7 @@ public class Room implements Serializable {
                 nextTurn();
             }
         } else {
-            try {
-                player.getOutputStream().writeObject("ERROR:Not your turn");
-                player.getOutputStream().flush();
-            } catch (IOException e) {
-                LOGGER.log(Level.SEVERE, "Error sending error message to player", e);
-            }
+            sendMessageToPlayer(player, "ERROR:Not your turn");
         }
     }
 
@@ -231,7 +206,7 @@ public class Room implements Serializable {
     }
 
     private void determineRoundWinner() {
-        // Logic to determine round winner and update scores
+        // Implement logic to determine round winner
         currentRound++;
         if (currentRound >= totalRounds) {
             endGame();
@@ -244,7 +219,7 @@ public class Room implements Serializable {
 
     private void endGame() {
         broadcastMessage("GAME_OVER");
-        // Logic to determine overall winner
+        // Implement logic to determine the overall winner
     }
 
     public synchronized void broadcastMessage(String message) {
@@ -255,45 +230,37 @@ public class Room implements Serializable {
                 client.flush();
             } catch (IOException e) {
                 closedStreams.add(client);
-                e.printStackTrace();
+                LOGGER.log(Level.SEVERE, "Error broadcasting message", e);
             }
         }
         clientStreams.removeAll(closedStreams);
     }
 
     public synchronized void broadcastUserList() {
-        List<ObjectOutputStream> closedStreams = new ArrayList<>();
-        for (ObjectOutputStream out : clientStreams) {
+        broadcastMessage("USER_LIST:" + String.join(",", teamA) + ":" + String.join(",", teamB));
+    }
+
+    private void sendMessageToPlayer(Player player, String message) {
+        try {
+            player.getOutputStream().writeObject(message);
+            player.getOutputStream().flush();
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error sending message to player", e);
+        }
+    }
+
+    private void notifyPlayerKicked(Player player) {
+        sendMessageToPlayer(player, "KICKED");
+        player.closeConnections();
+    }
+
+    private void closeAllConnections() {
+        for (Player player : players) {
             try {
-                out.writeObject("USER_LIST:" + String.join(",", teamA) + ":" + String.join(",", teamB));
-                out.flush();
+                player.getOutputStream().close();
             } catch (IOException e) {
-                System.out.println("IOException caught: " + e);
-                closedStreams.add(out);
+                LOGGER.log(Level.SEVERE, "Error closing player connection", e);
             }
         }
-        clientStreams.removeAll(closedStreams);
-    }
-
-    public synchronized void addPlayer(Player player) {
-        if (players.stream().noneMatch(p -> p.getName().equals(player.getName())) && players.size() < maxPlayers) {
-            players.add(player);
-            clientStreams.add(player.getOutputStream());
-            if (teamA.size() <= teamB.size()) {
-                teamA.add(player.getName());
-            } else {
-                teamB.add(player.getName());
-            }
-            broadcastMessage(player.getName() + " has joined the room.");
-            broadcastUserList();
-        }
-    }
-
-    public synchronized void addClientStream(ObjectOutputStream out) {
-        clientStreams.add(out);
-    }
-
-    public synchronized List<ObjectOutputStream> getClientStreams() {
-        return new ArrayList<>(clientStreams);
     }
 }

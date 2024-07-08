@@ -5,7 +5,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class Deck  implements Serializable {
+public class Deck implements Serializable {
+    private static final long serialVersionUID = 1L;
     private List<Card> cards;
 
     public Deck() {
@@ -36,6 +37,19 @@ public class Deck  implements Serializable {
             return null;
         }
         return cards.remove(0);
+    }
+
+    public List<Card> drawCards(int count) {
+        List<Card> drawnCards = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Card card = drawCard();
+            if (card != null) {
+                drawnCards.add(card);
+            } else {
+                break;
+            }
+        }
+        return drawnCards;
     }
 
     public boolean isEmpty() {

@@ -1,15 +1,15 @@
 package com.yourpackage;
 
 import javax.swing.*;
-import java.awt.*;
-import java.awt.event.ActionEvent;
+        import java.awt.*;
+        import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.*;
-import java.util.List;
+        import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,6 +29,8 @@ public class GameUI {
     private JPanel handPanel; // Panel for displaying the player's hand
     private List<JButton> handButtons; // Buttons representing cards in hand
     private JPanel hokmSelectionPanel; // Panel for selecting the Hokm suit
+    private boolean isMyTurn = false; // Flag to check if it's the player's turn
+    private String currentSuit = ""; // The current suit of the round
 
     public GameUI(String username, String roomCreator, ObjectOutputStream out, ObjectInputStream in, Socket socket) {
         this.username = username;
@@ -120,13 +122,21 @@ public class GameUI {
                             updateScores(message);
                         } else if (message.startsWith("START_GAME:")) {
                             handleStartGame(message);
-                        } else if (message.startsWith("DEAL_CARDS:")) {
+                        }
+                        else if (message.startsWith("MASTER_SELECTED:")) {
+                            String master = message.split(":")[1];
+                            LOGGER.info("Master is" + master);
+                        }
+                        else if (message.startsWith("DEAL_CARDS:")) {
                             DealCards(Collections.singletonList(message));
-                        } else if (message.startsWith("CHOOSE_HOKM:")) {
+                        } else if (message.contains("SELECT_HOKM")) {
                             showHokmSelection();
                         } else if (message.startsWith("PLAY_CARD:")) {
                             handlePlayCard(message);
+                        } else if (message.startsWith("PLAYER_TURN:")) {
+                            handleTurn(message);
                         } else {
+                            LOGGER.info("Opsssss");
                             chatPanel.updateChatArea(message);
                         }
                     }
@@ -135,6 +145,15 @@ public class GameUI {
                 LOGGER.log(Level.SEVERE, "Error in game message handling", e);
             }
         }).start();
+    }
+
+    private void handleTurn(String message) {
+        String player = message.split(":")[1];
+        isMyTurn = player.equals(username);
+        // Notify user if it's their turn
+        if (isMyTurn) {
+            JOptionPane.showMessageDialog(null, "It's your turn!", "Turn", JOptionPane.INFORMATION_MESSAGE);
+        }
     }
 
     private List<String> extractPlayerNames(String part) {
@@ -216,27 +235,15 @@ public class GameUI {
             positions[3] = teamA.size() > 1 ? teamA.get(1) : "";
         }
 
-        int[][] coordinates = {
-                {350, 500}, // Bottom (current user)
-                {350, 20},  // Top (opposite teammate)
-                {20, 250},  // Left (opponent 1)
-                {680, 250}  // Right (opponent 2)
-        };
-
-        for (int i = 0; i < 4; i++) {
-            JLabel playerLabel = new JLabel(positions[i]);
-            playerLabel.setBounds(coordinates[i][0], coordinates[i][1], 100, 30);
-            playerLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            playersPanel.add(playerLabel);
+        for (int i = 0; i < positions.length; i++) {
+            if (!positions[i].isEmpty()) {
+                String playerName = positions[i];
+                JLabel playerLabel = new JLabel(playerName, SwingConstants.CENTER);
+                playerLabel.setBounds(i % 2 == 0 ? 350 : (i == 1 ? 700 : 20), i < 2 ? 50 : 500, 100, 30);
+                playersPanel.add(playerLabel);
+            }
         }
     }
-
-    private void toggleChatPanel() {
-        boolean isVisible = chatPanel.isVisible();
-        chatPanel.setVisible(!isVisible);
-    }
-
-
 
     private void DealCards(List<String> cards) {
         SwingUtilities.invokeLater(() -> {
@@ -265,8 +272,7 @@ public class GameUI {
             handPanel.repaint();
         });
     }
-
-    private ImageIcon createImageIcon(String path) {
+    protected ImageIcon createImageIcon(String path) {
         java.net.URL imgURL = getClass().getResource(path);
         if (imgURL != null) {
             return new ImageIcon(imgURL);
@@ -275,58 +281,89 @@ public class GameUI {
             return null;
         }
     }
-    private void showHokmSelection() {
-        SwingUtilities.invokeLater(() -> {
-            hokmSelectionPanel.removeAll();
-            String[] suits = {"hearts", "diamonds", "clubs", "spades"};
-            for (String suit : suits) {
-                String imagePath = "/data/" + suit + ".png";
-                JButton suitButton = new JButton(new ImageIcon(Objects.requireNonNull(getClass().getResource(imagePath))));
-                suitButton.setActionCommand(suit);
-                suitButton.addActionListener(new HokmSelectionListener());
-                hokmSelectionPanel.add(suitButton);
-            }
-            hokmSelectionPanel.setVisible(true);
-            hokmSelectionPanel.revalidate();
-            hokmSelectionPanel.repaint();
-        });
-    }
-
-    private void handlePlayCard(String message) {
-        // Implementation for handling played card
-    }
-
     private class CardButtonListener implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
             String card = e.getActionCommand();
-            LOGGER.log(Level.INFO, "Card played: " + card);
-            try {
-                out.writeObject("PLAY_CARD:" + card);
-                out.flush();
-                // Remove the played card from hand
-                JButton playedButton = (JButton) e.getSource();
-                handPanel.remove(playedButton);
-                handPanel.revalidate();
-                handPanel.repaint();
-            } catch (IOException ex) {
-                LOGGER.log(Level.SEVERE, "Error sending played card", ex);
-            }
+            playCard(card);
         }
     }
 
-    private class HokmSelectionListener implements ActionListener {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            String selectedHokm = e.getActionCommand();
-            LOGGER.log(Level.INFO, "Hokm selected: " + selectedHokm);
-            try {
-                out.writeObject("HOKM_SELECTED:" + selectedHokm);
-                out.flush();
-                hokmSelectionPanel.setVisible(false);
-            } catch (IOException ex) {
-                LOGGER.log(Level.SEVERE, "Error sending hokm selection", ex);
-            }
+
+    private void playCard(String card) {
+        if (!isMyTurn) {
+            JOptionPane.showMessageDialog(null, "It's not your turn!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        if (!canPlayCard(card)) {
+            JOptionPane.showMessageDialog(null, "You cannot play this card!", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        try {
+            out.writeObject("PLAY_CARD:" + username + ":" + card);
+            out.flush();
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error sending played card", e);
+        }
+    }
+
+    private boolean canPlayCard(String card) {
+        // Implement logic to check if the card can be played
+        return true;
+    }
+
+    private void showHokmSelection() {
+        LOGGER.info("we are there");
+        hokmSelectionPanel.setVisible(true);
+        handButtons.forEach(button -> button.setEnabled(false));
+
+        hokmSelectionPanel.removeAll();
+        String[] suits = {"Hearts", "Diamonds", "Clubs", "Spades"};
+        for (String suit : suits) {
+            JButton suitButton = new JButton(suit);
+            suitButton.addActionListener(e -> selectHokm(suit));
+            hokmSelectionPanel.add(suitButton);
+        }
+
+        hokmSelectionPanel.revalidate();
+        hokmSelectionPanel.repaint();
+    }
+
+    private void selectHokm(String suit) {
+        hokmSelectionPanel.setVisible(false);
+        handButtons.forEach(button -> button.setEnabled(true));
+
+        try {
+            if (username.equals(roomCreator)) {
+                out.writeObject("SET_HOKM:" + roomCreator + ":" + suit);
+                out.flush();
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error sending Hokm selection", e);
+        }
+    }
+
+
+    private void handlePlayCard(String message) {
+        String[] parts = message.split(":");
+        String player = parts[1];
+        String card = parts[2];
+
+        // Display the played card in the middle
+        JLabel playedCardLabel = new JLabel(player + " played: " + card);
+        playedCardLabel.setBounds(350, 250, 100, 30);
+        playersPanel.add(playedCardLabel);
+        playersPanel.revalidate();
+        playersPanel.repaint();
+
+        if (player.equals(username)) {
+            isMyTurn = false;
+        }
+    }
+
+    private void toggleChatPanel() {
+        chatPanel.setVisible(!chatPanel.isVisible());
     }
 }
