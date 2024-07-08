@@ -148,7 +148,6 @@ public class RoomView {
         frame.setVisible(true);
     }
 
-
     private void setupConnection() {
         try {
             socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
@@ -173,7 +172,7 @@ public class RoomView {
                                 break;
                             } else if ("KICKED".equals(message)) {
                                 JOptionPane.showMessageDialog(frame, "You have been kicked from the room.", "Kicked", JOptionPane.WARNING_MESSAGE);
-                                closeRoom();
+                                closeRoom(); // Ensure the room is closed and resources are cleaned up
                                 break;
                             } else if ("ROOM_CLOSED".equals(message)) {
                                 JOptionPane.showMessageDialog(frame, "The room has been closed by the creator.", "Room Closed", JOptionPane.INFORMATION_MESSAGE);
@@ -199,11 +198,13 @@ public class RoomView {
             LOGGER.log(Level.SEVERE, "Error setting up connection", e);
         }
     }
+
     private void handleUserListMessage(String message) {
         String userList = message.substring("USER_LIST:".length());
         List<String> users = List.of(userList.split(":"));
         displayUsers(users);
     }
+
     private void updateChatArea(String message) {
         SwingUtilities.invokeLater(() -> chatArea.append(message + "\n"));
     }
@@ -213,9 +214,23 @@ public class RoomView {
             teamAPanel.removeAll();
             teamBPanel.removeAll();
 
-            int midIndex = users.size() / 2;
-            List<String> teamA = users.subList(0, midIndex);
-            List<String> teamB = users.subList(midIndex, users.size());
+            List<String> teamA = new ArrayList<>();
+            List<String> teamB = new ArrayList<>();
+
+            for (int i = 0; i < users.size(); i++) {
+                if (i % 2 == 0) {
+                    teamA.add(users.get(i));
+                } else {
+                    teamB.add(users.get(i));
+                }
+            }
+
+            // If the number of users is odd, add an empty player to the smaller team
+            if (teamA.size() < teamB.size()) {
+                teamA.add("Empty Player");
+            } else if (teamB.size() < teamA.size()) {
+                teamB.add("Empty Player");
+            }
 
             displayTeam(teamA, teamAPanel);
             displayTeam(teamB, teamBPanel);
@@ -284,7 +299,6 @@ public class RoomView {
         teamPanel.revalidate();
         teamPanel.repaint();
     }
-
 
     private void updateSendButtonState() {
         SwingUtilities.invokeLater(() -> {

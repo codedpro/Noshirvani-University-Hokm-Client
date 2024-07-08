@@ -53,4 +53,8 @@ public class ChatPanel extends JPanel {
     public void updateChatArea(String message) {
         SwingUtilities.invokeLater(() -> chatArea.append(message + "\n"));
     }
+
+    public String getUsername() {
+        return username;
+    }
 }

@@ -92,9 +92,7 @@
 
                 List<Room> rooms = (List<Room>) in.readObject();
 
-
                 roomsPanel.removeAll();
-
 
                 GridBagConstraints gbc = new GridBagConstraints();
                 gbc.insets = new Insets(10, 10, 10, 10);
@@ -105,13 +103,11 @@
 
                 for (Room room : rooms) {
                     if (room.getCreator() != null) {
-
                         JPanel roomPanel = createRoomPanel(room, username);
                         roomsPanel.add(roomPanel, gbc);
                         gbc.gridy++;
                     }
                 }
-
 
                 for (int i = rooms.size(); i < 3; i++) {
                     JPanel emptyRoomPanel = createEmptyRoomPanel();
@@ -172,19 +168,20 @@
                 LOGGER.info("Response from server: " + response);
                 if (response.startsWith("ROOM_CREATED")) {
                     JOptionPane.showMessageDialog(null, "Room created successfully!");
+                    fetchAndDisplayRooms(username); // Fetch and display rooms immediately after creating a room
                     frame.dispose();
                     new RoomView(username, username, maxPlayers);
                 } else {
                     JOptionPane.showMessageDialog(null, "Failed to create room! Response: " + response);
                 }
 
-                fetchAndDisplayRooms(username);
-
             } catch (IOException | ClassNotFoundException e) {
                 LOGGER.log(Level.SEVERE, "Error creating room", e);
                 JOptionPane.showMessageDialog(null, "Error creating room: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
+
+
 
         private JPanel createRoomPanel(Room room, String username) {
             JPanel panel = new JPanel();
@@ -217,7 +214,7 @@
                 });
             }
 
-            List<String> players = room.getPlayers();
+            List<Player> players = room.getPlayers();
             for (int i = 0; i < room.getMaxPlayers(); i++) {
                 gbc.gridy = 1;
                 gbc.gridx = i;
@@ -234,7 +231,7 @@
 
                 gbc.gridy = 2;
                 JLabel playerLabel = new JLabel();
-                playerLabel.setText(i < players.size() ? players.get(i) : "Empty Slot");
+                playerLabel.setText(i < players.size() ? (players.get(i).getName()) : "Empty Slot");
                 panel.add(playerLabel, gbc);
             }
 
