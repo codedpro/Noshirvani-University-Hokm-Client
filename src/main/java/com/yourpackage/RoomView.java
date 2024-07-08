@@ -148,6 +148,7 @@ public class RoomView {
         frame.setVisible(true);
     }
 
+
     private void setupConnection() {
         try {
             socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
@@ -167,7 +168,7 @@ public class RoomView {
                                 String[] parts = message.split(":");
                                 List<String> teamA = List.of(parts[1].split(","));
                                 List<String> teamB = List.of(parts[2].split(","));
-                                SwingUtilities.invokeLater(() -> new GameUI(username, roomCreator, out, in, socket, teamA, teamB));
+                                SwingUtilities.invokeLater(() -> new GameUI(username, roomCreator, out, in, socket));
                                 frame.dispose();
                                 break;
                             } else if ("KICKED".equals(message)) {
@@ -178,6 +179,8 @@ public class RoomView {
                                 JOptionPane.showMessageDialog(frame, "The room has been closed by the creator.", "Room Closed", JOptionPane.INFORMATION_MESSAGE);
                                 closeRoom();
                                 break;
+                            } else if (message.startsWith("USER_LIST:")) {
+                                handleUserListMessage(message);
                             } else {
                                 updateChatArea(message);
                             }
@@ -196,7 +199,11 @@ public class RoomView {
             LOGGER.log(Level.SEVERE, "Error setting up connection", e);
         }
     }
-
+    private void handleUserListMessage(String message) {
+        String userList = message.substring("USER_LIST:".length());
+        List<String> users = List.of(userList.split(":"));
+        displayUsers(users);
+    }
     private void updateChatArea(String message) {
         SwingUtilities.invokeLater(() -> chatArea.append(message + "\n"));
     }
@@ -206,83 +213,78 @@ public class RoomView {
             teamAPanel.removeAll();
             teamBPanel.removeAll();
 
-            int numPlayers = users.size();
+            int midIndex = users.size() / 2;
+            List<String> teamA = users.subList(0, midIndex);
+            List<String> teamB = users.subList(midIndex, users.size());
 
-            while (users.size() < maxPlayers) {
-                users.add("Empty Player");
-            }
+            displayTeam(teamA, teamAPanel);
+            displayTeam(teamB, teamBPanel);
 
-            for (int i = 0; i < maxPlayers; i++) {
-                String user = users.get(i);
-                String imagePath;
-                if (!user.equals("Empty Player")) {
-                    imagePath = "/data/boy.png";
-                } else {
-                    imagePath = "/data/nullplayer.png";
-                }
-
-                boolean isTeamA = i < maxPlayers / 2;
-                JPanel teamPanel = isTeamA ? teamAPanel : teamBPanel;
-                int yOffset = (isTeamA ? i : i - maxPlayers / 2) * (maxPlayers == 2 ? 58 : 58);
-
-                JPanel userPanelItem = new JPanel();
-                userPanelItem.setLayout(null);
-                userPanelItem.setBackground(Color.decode("#f0f0f0"));
-                userPanelItem.setBounds(0, yOffset, 478, 58);
-
-                ImageIcon imageIcon = new ImageIcon(Objects.requireNonNull(getClass().getResource(imagePath)));
-                JLabel userPic = new JLabel() {
-                    @Override
-                    protected void paintComponent(Graphics g) {
-                        Dimension dim = getSize();
-                        Graphics2D g2 = (Graphics2D) g.create();
-                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                        g2.setColor(Color.WHITE);
-                        g2.fillOval(0, 0, dim.width - 1, dim.height - 1);
-                        g2.drawOval(0, 0, dim.width - 1, dim.height - 1);
-                        g2.clip(new Ellipse2D.Float(0, 0, dim.width, dim.height));
-                        g.drawImage(imageIcon.getImage(), 0, 0, dim.width, dim.height, null);
-                        g2.dispose();
-                    }
-                };
-
-                userPic.setBounds(20, 14, 30, 30);
-                userPanelItem.add(userPic);
-
-                JLabel userName = new JLabel(user);
-                userName.setFont(new Font("Arial", Font.PLAIN, 14));
-                userName.setBounds(60, 14, 200, 30);
-                userPanelItem.add(userName);
-
-                if (!user.equals("Empty Player") && roomCreator.equals(username) && !user.equals(username)) {
-                    JLabel kickLabel = new JLabel("<html><u style='color:red;'>kick</html>");
-                    kickLabel.setFont(new Font("Arial", Font.BOLD, 12));
-                    kickLabel.setForeground(Color.RED);
-                    kickLabel.setBounds(400, 14, 50, 30);
-                    kickLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-                    kickLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-                        public void mouseClicked(java.awt.event.MouseEvent evt) {
-                            kickUser(user);
-                        }
-                    });
-                    userPanelItem.add(kickLabel);
-                }
-
-                teamPanel.add(userPanelItem);
-            }
-
-            teamAPanel.revalidate();
-            teamAPanel.repaint();
-            teamBPanel.revalidate();
-            teamBPanel.repaint();
-
-            if (numPlayers == maxPlayers && roomCreator.equals(username)) {
+            if (users.size() == maxPlayers && roomCreator.equals(username)) {
                 startGameButton.setEnabled(true);
             } else {
                 startGameButton.setEnabled(false);
             }
         });
     }
+
+    private void displayTeam(List<String> team, JPanel teamPanel) {
+        for (int i = 0; i < team.size(); i++) {
+            String user = team.get(i);
+            String imagePath = "/data/boy.png";
+            if (user.equals("Empty Player")) {
+                imagePath = "/data/nullplayer.png";
+            }
+
+            JPanel userPanelItem = new JPanel();
+            userPanelItem.setLayout(null);
+            userPanelItem.setBackground(Color.decode("#f0f0f0"));
+            userPanelItem.setBounds(0, i * 58, 478, 58);
+
+            ImageIcon imageIcon = new ImageIcon(Objects.requireNonNull(getClass().getResource(imagePath)));
+            JLabel userPic = new JLabel() {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    Dimension dim = getSize();
+                    Graphics2D g2 = (Graphics2D) g.create();
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(Color.WHITE);
+                    g2.fillOval(0, 0, dim.width - 1, dim.height - 1);
+                    g2.drawOval(0, 0, dim.width - 1, dim.height - 1);
+                    g2.clip(new Ellipse2D.Float(0, 0, dim.width, dim.height));
+                    g.drawImage(imageIcon.getImage(), 0, 0, dim.width, dim.height, null);
+                    g2.dispose();
+                }
+            };
+
+            userPic.setBounds(20, 14, 30, 30);
+            userPanelItem.add(userPic);
+
+            JLabel userName = new JLabel(user);
+            userName.setFont(new Font("Arial", Font.PLAIN, 14));
+            userName.setBounds(60, 14, 200, 30);
+            userPanelItem.add(userName);
+
+            if (!user.equals("Empty Player") && roomCreator.equals(username) && !user.equals(username)) {
+                JLabel kickLabel = new JLabel("<html><u style='color:red;'>kick</html>");
+                kickLabel.setFont(new Font("Arial", Font.BOLD, 12));
+                kickLabel.setForeground(Color.RED);
+                kickLabel.setBounds(400, 14, 50, 30);
+                kickLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+                kickLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+                    public void mouseClicked(java.awt.event.MouseEvent evt) {
+                        kickUser(user);
+                    }
+                });
+                userPanelItem.add(kickLabel);
+            }
+
+            teamPanel.add(userPanelItem);
+        }
+        teamPanel.revalidate();
+        teamPanel.repaint();
+    }
+
 
     private void updateSendButtonState() {
         SwingUtilities.invokeLater(() -> {

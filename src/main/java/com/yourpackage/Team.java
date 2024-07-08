@@ -1,9 +1,12 @@
 package com.yourpackage;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Team {
+public class Team implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private String name;
     private int score;
     private List<String> players;

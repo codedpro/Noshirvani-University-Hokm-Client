@@ -2,9 +2,11 @@ package com.yourpackage;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.geom.Ellipse2D;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.logging.Level;
@@ -24,7 +26,7 @@ public class GameUI {
     private JLabel teamAScore;
     private JLabel teamBScore;
 
-    public GameUI(String username, String roomCreator, ObjectOutputStream out, ObjectInputStream in, Socket socket, List<String> teamA, List<String> teamB) {
+    public GameUI(String username, String roomCreator, ObjectOutputStream out, ObjectInputStream in, Socket socket) {
         this.username = username;
         this.roomCreator = roomCreator;
         this.out = out;
@@ -33,15 +35,9 @@ public class GameUI {
         this.teamA = new Team("Team A");
         this.teamB = new Team("Team B");
 
-        for (String player : teamA) {
-            this.teamA.addPlayer(player);
-        }
-        for (String player : teamB) {
-            this.teamB.addPlayer(player);
-        }
-
         createAndShowGUI();
         setupConnection();
+        requestPlayerList(); // Request player list when the game starts
     }
 
     private void createAndShowGUI() {
@@ -83,9 +79,6 @@ public class GameUI {
         frame.add(chatPanel);
 
         frame.setVisible(true);
-
-        // Display initial teams
-        displayTeams(this.teamA.getPlayers(), this.teamB.getPlayers());
     }
 
     private void setupConnection() {
@@ -96,8 +89,13 @@ public class GameUI {
                     if (received instanceof String message) {
                         LOGGER.info("Received message: " + message);
                         if (message.startsWith("PLAYER_LIST:")) {
-                            List<String> players = List.of(message.substring(12).split(","));
-                            updatePlayersList(players);
+                            String[] parts = message.split(":", 4);
+                            if (parts.length == 4) {
+                                String teamAMessage = parts[2].trim();
+                                String teamBMessage = parts[3].trim();
+                                LOGGER.info("Team A: " + teamAMessage + ", Team B: " + teamBMessage);
+                                updatePlayersList(teamAMessage, teamBMessage);
+                            }
                         } else if (message.startsWith("CHAT:")) {
                             chatPanel.updateChatArea(message.substring(5));
                         } else if (message.startsWith("SCORE_UPDATE:")) {
@@ -115,20 +113,30 @@ public class GameUI {
         }).start();
     }
 
-    private void updatePlayersList(List<String> players) {
+    private List<String> extractPlayerNames(String part) {
+        return Arrays.stream(part.replace("Team A: ", "").replace("Team B: ", "").split(","))
+                .map(String::trim)
+                .filter(name -> !name.isEmpty())
+                .toList();
+    }
+
+    private void requestPlayerList() {
+        try {
+            out.writeObject("PLAYER_LIST:" + username);
+            out.flush();
+            LOGGER.log(Level.INFO, "Player list requested");
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error requesting player list", e);
+        }
+    }
+
+    private void updatePlayersList(String teamAMessage, String teamBMessage) {
+        List<String> teamA = extractPlayerNames(teamAMessage);
+        List<String> teamB = extractPlayerNames(teamBMessage);
+        LOGGER.log(Level.INFO, "Team A: " + teamA + ", Team B: " + teamB);
         SwingUtilities.invokeLater(() -> {
-            // Clear previous player labels
             playersPanel.removeAll();
-
-            // Split players into Team A and Team B based on the initial configuration
-            List<String> teamA = this.teamA.getPlayers();
-            List<String> teamB = this.teamB.getPlayers();
-
-            if (players.size() == 4) {
-                setupHokmGrid(teamA, teamB);
-            }
-
-            // Repaint the panel to reflect the updated player positions
+            setupHokmGrid(teamA, teamB);
             playersPanel.revalidate();
             playersPanel.repaint();
         });
@@ -168,36 +176,56 @@ public class GameUI {
 
     private void setupHokmGrid(List<String> teamA, List<String> teamB) {
         String[] positions = new String[4];
+        Arrays.fill(positions, ""); // Initialize positions with empty strings
 
         if (teamA.contains(username)) {
             positions[0] = username;
             positions[2] = teamA.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
-            positions[1] = teamB.get(0);
-            positions[3] = teamB.get(1);
-        } else {
+            positions[1] = teamB.size() > 0 ? teamB.get(0) : "";
+            positions[3] = teamB.size() > 1 ? teamB.get(1) : "";
+        } else if (teamB.contains(username)) {
             positions[0] = username;
             positions[2] = teamB.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
-            positions[1] = teamA.get(0);
-            positions[3] = teamA.get(1);
+            positions[1] = teamA.size() > 0 ? teamA.get(0) : "";
+            positions[3] = teamA.size() > 1 ? teamA.get(1) : "";
         }
 
-        addPlayerLabel(positions[0], 350, 500, "Bottom");
-        addPlayerLabel(positions[1], 350, 50, "Top");
-        addPlayerLabel(positions[2], 50, 275, "Left");
-        addPlayerLabel(positions[3], 650, 275, "Right");
+        int[][] coordinates = {
+                {350, 500}, // Bottom (current user)
+                {350, 20},  // Top (opposite teammate)
+                {20, 250},  // Left (opponent 1)
+                {680, 250}  // Right (opponent 2)
+        };
+
+        if (positions[2].isEmpty() && positions[3].isEmpty()) { // Only 2 players
+            coordinates = new int[][] {
+                    {350, 500}, // Bottom (current user)
+                    {350, 20}   // Top (opponent)
+            };
+        }
+
+        for (int i = 0; i < coordinates.length; i++) {
+            if (!positions[i].isEmpty()) {
+                int x = coordinates[i][0];
+                int y = coordinates[i][1];
+                addPlayerLabel(positions[i], x, y);
+            }
+        }
     }
 
-    private void addPlayerLabel(String name, int x, int y, String position) {
+    private void addPlayerLabel(String name, int x, int y) {
         JPanel playerPanel = new JPanel();
         playerPanel.setLayout(new BorderLayout());
         playerPanel.setBounds(x, y, 100, 100);
         playerPanel.setOpaque(false);
 
-        JLabel nameLabel = new JLabel(name + " (" + position + ")");
+        JLabel nameLabel = new JLabel(name);
         nameLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        nameLabel.setFont(new Font("Arial", Font.PLAIN, 14));
         playerPanel.add(nameLabel, BorderLayout.SOUTH);
 
         JLabel profilePic = new JLabel(new ImageIcon(Objects.requireNonNull(getClass().getResource("/data/boy.png"))));
+        profilePic.setHorizontalAlignment(SwingConstants.CENTER);
         playerPanel.add(profilePic, BorderLayout.CENTER);
 
         playersPanel.add(playerPanel);

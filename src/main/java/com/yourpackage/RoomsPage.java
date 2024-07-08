@@ -105,7 +105,7 @@
 
                 for (Room room : rooms) {
                     if (room.getCreator() != null) {
-                        LOGGER.info("Room: " + room.getCreator() + ", Players: " + room.getPlayers());
+
                         JPanel roomPanel = createRoomPanel(room, username);
                         roomsPanel.add(roomPanel, gbc);
                         gbc.gridy++;
