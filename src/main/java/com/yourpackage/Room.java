@@ -237,9 +237,9 @@ public class Room implements Serializable {
                 broadcastMessage("TEAM_WINS_ROUND:" + winningTeam);
                 resetForNextRound(winningTeamIndex);
             } else {
-                master = winner; // Set the winner as the new master
-                currentPlayerIndex = players.indexOf(master); // Start from the winning player
-                nextTurn(); // Continue the next turn
+                master = winner;
+                currentPlayerIndex = players.indexOf(master);
+                nextTurn();
             }
         }
     }
@@ -265,7 +265,10 @@ public class Room implements Serializable {
         if (card1.getSuit().equals(hokmSuit) && !card2.getSuit().equals(hokmSuit)) {
             return true;
         }
-        if (!card1.getSuit().equals(hokmSuit) && card2.getSuit().equals(hokmSuit)) {
+        else if (!card1.getSuit().equals(hokmSuit) && card2.getSuit().equals(hokmSuit)) {
+            return false;
+        }
+        else if (!card1.getSuit().equals(card2.getSuit())) {
             return false;
         }
         return card1.getPower() > card2.getPower();
@@ -273,7 +276,6 @@ public class Room implements Serializable {
 
     private void endGame() {
         broadcastMessage("GAME_OVER");
-        // Implement logic to determine the overall winner
     }
 
     public synchronized void broadcastMessage(String message) {
