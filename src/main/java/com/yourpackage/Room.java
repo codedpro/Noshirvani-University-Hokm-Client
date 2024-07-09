@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,6 +27,9 @@ public class Room implements Serializable {
     private int currentRound;
     private int totalRounds;
     private int currentPlayerIndex;
+    private Map<Player, Card> currentTurnCards;
+    private int[] teamScores;
+    private int[] teamRoundWins;
 
     public Room(String creator, int maxPlayers, int totalRounds) {
         this.creator = creator;
@@ -38,6 +43,9 @@ public class Room implements Serializable {
         this.deck = new Deck();
         this.currentRound = 0;
         this.currentPlayerIndex = 0;
+        this.currentTurnCards = new HashMap<>();
+        this.teamScores = new int[]{0, 0};
+        this.teamRoundWins = new int[]{0, 0};
     }
 
     private void readObject(java.io.ObjectInputStream in) throws IOException, ClassNotFoundException {
@@ -179,9 +187,7 @@ public class Room implements Serializable {
     }
 
     private void nextTurn() {
-        if (currentPlayerIndex >= players.size()) {
-            currentPlayerIndex = 0;
-        }
+        currentPlayerIndex %= players.size();
         Player currentPlayer = players.get(currentPlayerIndex);
         broadcastMessage("PLAYER_TURN:" + currentPlayer.getName());
     }
@@ -189,10 +195,12 @@ public class Room implements Serializable {
     public synchronized void playCard(Player player, Card card) {
         if (players.get(currentPlayerIndex).equals(player)) {
             player.getHand().remove(card);
+            currentTurnCards.put(player, card);
             broadcastMessage("CARD_PLAYED:" + player.getName() + ":" + card);
             currentPlayerIndex++;
-            if (isRoundOver()) {
-                determineRoundWinner();
+            if (currentTurnCards.size() == players.size()) {
+                determineTurnWinner();
+                currentTurnCards.clear();
             } else {
                 nextTurn();
             }
@@ -201,25 +209,71 @@ public class Room implements Serializable {
         }
     }
 
-    private boolean isRoundOver() {
-        return players.stream().allMatch(player -> player.getHand().isEmpty());
+    private void determineTurnWinner() {
+        Player winner = null;
+        Card winningCard = null;
+
+        for (Map.Entry<Player, Card> entry : currentTurnCards.entrySet()) {
+            Player player = entry.getKey();
+            Card card = entry.getValue();
+
+            if (winningCard == null || isCardHigher(card, winningCard)) {
+                winningCard = card;
+                winner = player;
+            }
+        }
+
+        if (winner != null) {
+            String winnerName = winner.getName();
+            String winningTeam = teamA.contains(winnerName) ? "Team A" : "Team B";
+            int winningTeamIndex = teamA.contains(winnerName) ? 0 : 1;
+            teamScores[winningTeamIndex]++;
+
+            broadcastMessage("TURN_WINNER:" + winningTeam);
+            broadcastMessage("SCORE_UPDATE:Team A:" + teamScores[0] + ":Team B:" + teamScores[1]);
+            broadcastMessage("ROUND_WINS_UPDATE:Team A:" + teamRoundWins[0] + ":Team B:" + teamRoundWins[1]);
+
+            if (teamScores[winningTeamIndex] >= 7) {
+                broadcastMessage("TEAM_WINS_ROUND:" + winningTeam);
+                resetForNextRound(winningTeamIndex);
+            } else {
+                master = winner; // Set the winner as the new master
+                currentPlayerIndex = players.indexOf(master); // Start from the winning player
+                nextTurn(); // Continue the next turn
+            }
+        }
     }
 
-    private void determineRoundWinner() {
+    private void resetForNextRound(int winningTeamIndex) {
+        teamScores[0] = 0;
+        teamScores[1] = 0;
+        teamRoundWins[winningTeamIndex]++;
+        broadcastMessage("ROUND_WINS_UPDATE:Team A:" + teamRoundWins[0] + ":Team B:" + teamRoundWins[1]);
 
-        currentRound++;
-        if (currentRound >= totalRounds) {
+        if (teamRoundWins[winningTeamIndex] >= 7) {
+            broadcastMessage("TEAM_WINS_GAME:" + (winningTeamIndex == 0 ? "Team A" : "Team B"));
             endGame();
         } else {
             deck = new Deck();
             selectMaster();
             dealInitialCards();
+            notifyMasterToPickHokm();
         }
+    }
+
+    private boolean isCardHigher(Card card1, Card card2) {
+        if (card1.getSuit().equals(hokmSuit) && !card2.getSuit().equals(hokmSuit)) {
+            return true;
+        }
+        if (!card1.getSuit().equals(hokmSuit) && card2.getSuit().equals(hokmSuit)) {
+            return false;
+        }
+        return card1.getPower() > card2.getPower();
     }
 
     private void endGame() {
         broadcastMessage("GAME_OVER");
-
+        // Implement logic to determine the overall winner
     }
 
     public synchronized void broadcastMessage(String message) {

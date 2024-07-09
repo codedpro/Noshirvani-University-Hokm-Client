@@ -2,10 +2,11 @@ package com.yourpackage;
 
 import java.io.Serializable;
 
-public class Card  implements Serializable {
-    private String suit;
-    private String rank;
-    private int power;
+public class Card implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private final String suit;
+    private final String rank;
+    private final int power;
 
     public Card(String suit, String rank, int power) {
         this.suit = suit;
