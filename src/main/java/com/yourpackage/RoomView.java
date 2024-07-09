@@ -41,7 +41,6 @@ public class RoomView {
         createAndShowGUI();
         setupConnection();
     }
-
     private void createAndShowGUI() {
         frame = new JFrame("Room");
         frame.setSize(600, 800);
@@ -59,42 +58,42 @@ public class RoomView {
         frame.add(teamALabel);
 
         teamAPanel = new JPanel();
-        teamAPanel.setLayout(null);
+        teamAPanel.setLayout(new GridLayout(2, 1, 0, 10)); // 2 rows, 1 column, 10 px gap
         teamAPanel.setBackground(Color.decode("#f0f0f0"));
         teamAPanel.setBorder(new LineBorder(Color.decode("#cccccc"), 1));
-        teamAPanel.setBounds(60, 73, 478, maxPlayers == 2 ? 58 : 117);
+        teamAPanel.setBounds(60, 73, 478, 134); // Adjust height for 2 players (each player item height + gap)
         frame.add(teamAPanel);
 
         JLabel teamBLabel = new JLabel("Team B");
         teamBLabel.setFont(new Font("Arial", Font.BOLD, 15));
-        teamBLabel.setBounds(60, maxPlayers == 2 ? 145 : 205, 60, 20);
+        teamBLabel.setBounds(60, 217, 60, 20); // Adjusted to accommodate two player panels above
         frame.add(teamBLabel);
 
         teamBPanel = new JPanel();
-        teamBPanel.setLayout(null);
+        teamBPanel.setLayout(new GridLayout(2, 1, 0, 10)); // 2 rows, 1 column, 10 px gap
         teamBPanel.setBackground(Color.decode("#f0f0f0"));
         teamBPanel.setBorder(new LineBorder(Color.decode("#cccccc"), 1));
-        teamBPanel.setBounds(62, maxPlayers == 2 ? 175 : 235, 478, maxPlayers == 2 ? 58 : 117);
+        teamBPanel.setBounds(60, 245, 478, 134); // Adjust height for 2 players (each player item height + gap)
         frame.add(teamBPanel);
 
         JLabel chatRoomLabel = new JLabel("ChatRoom");
         chatRoomLabel.setFont(new Font("Arial", Font.BOLD, 15));
-        chatRoomLabel.setBounds(62, maxPlayers == 2 ? 245 : 370, 150, 20);
+        chatRoomLabel.setBounds(62, 390, 150, 20); // Adjusted to fit below team panels
         frame.add(chatRoomLabel);
 
         chatArea = new JTextArea();
-        chatArea.setBounds(62, maxPlayers == 2 ? 275 : 400, 478, 243);
+        chatArea.setBounds(62, 420, 478, 243);
         chatArea.setEditable(false);
         chatArea.setLineWrap(true);
         chatArea.setWrapStyleWord(true);
         chatArea.setFont(new Font("Arial", Font.PLAIN, 15));
         JScrollPane chatScrollPane = new JScrollPane(chatArea);
-        chatScrollPane.setBounds(62, maxPlayers == 2 ? 275 : 400, 478, 243);
+        chatScrollPane.setBounds(62, 420, 478, 243);
         frame.add(chatScrollPane);
 
         chatInput = new JTextField();
         chatInput.setFont(new Font("Arial", Font.PLAIN, 15));
-        chatInput.setBounds(62, maxPlayers == 2 ? 515 : 640, 378, 34);
+        chatInput.setBounds(62, 675, 378, 34);
         chatInput.addActionListener(e -> sendMessage());
         chatInput.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -116,7 +115,7 @@ public class RoomView {
 
         JButton sendButton = new JButton("Send");
         sendButton.setFont(new Font("Arial", Font.BOLD, 14));
-        sendButton.setBounds(439, maxPlayers == 2 ? 515 : 640, 100, 33);
+        sendButton.setBounds(439, 675, 100, 33);
         sendButton.setPreferredSize(new Dimension(100, 33));
         sendButton.setBackground(Color.decode("#343332"));
         sendButton.setForeground(Color.decode("#ffffff"));
@@ -126,7 +125,7 @@ public class RoomView {
 
         JButton backToMenuButton = new JButton("Back to menu");
         backToMenuButton.setFont(new Font("Arial", Font.BOLD, 14));
-        backToMenuButton.setBounds(62, maxPlayers == 2 ? 565 : 690, 232, 35);
+        backToMenuButton.setBounds(62, 725, 232, 35);
         backToMenuButton.setPreferredSize(new Dimension(232, 35));
         backToMenuButton.setBackground(Color.decode("#343332"));
         backToMenuButton.setForeground(Color.decode("#ffffff"));
@@ -136,7 +135,7 @@ public class RoomView {
 
         startGameButton = new JButton("Start game");
         startGameButton.setFont(new Font("Arial", Font.BOLD, 14));
-        startGameButton.setBounds(308, maxPlayers == 2 ? 565 : 690, 232, 35);
+        startGameButton.setBounds(308, 725, 232, 35);
         startGameButton.setPreferredSize(new Dimension(232, 35));
         startGameButton.setBackground(Color.red);
         startGameButton.setForeground(Color.decode("#ffffff"));
@@ -183,10 +182,6 @@ public class RoomView {
                             } else {
                                 updateChatArea(message);
                             }
-                        } else if (received instanceof List) {
-                            List<String> users = (List<String>) received;
-                            LOGGER.info("Received user list: " + users);
-                            displayUsers(users);
                         }
                     }
                 } catch (IOException | ClassNotFoundException e) {
@@ -201,41 +196,55 @@ public class RoomView {
 
     private void handleUserListMessage(String message) {
         String userList = message.substring("USER_LIST:".length());
-        List<String> users = List.of(userList.split(":"));
-        displayUsers(users);
-    }
+        String[] teams = userList.split(":");
 
+        List<String> teamA = new ArrayList<>();
+        List<String> teamB = new ArrayList<>();
+
+        if (teams.length > 0) {
+            teamA = new ArrayList<>(List.of(teams[0].split(",")));
+        }
+
+        if (teams.length > 1) {
+            teamB = new ArrayList<>(List.of(teams[1].split(",")));
+        }
+
+        // Fill remaining slots with "Empty Player" placeholders if needed
+        while (teamA.size() < 2) {
+            teamA.add("Empty Player");
+        }
+
+        while (teamB.size() < 2) {
+            teamB.add("Empty Player");
+        }
+
+        displayUsers(teamA, teamB);
+    }
     private void updateChatArea(String message) {
         SwingUtilities.invokeLater(() -> chatArea.append(message + "\n"));
     }
-
-    private void displayUsers(List<String> users) {
+    private void displayUsers(List<String> teamA, List<String> teamB) {
         SwingUtilities.invokeLater(() -> {
             teamAPanel.removeAll();
             teamBPanel.removeAll();
 
-            List<String> teamA = new ArrayList<>();
-            List<String> teamB = new ArrayList<>();
-
-            for (int i = 0; i < users.size(); i++) {
-                if (i % 2 == 0) {
-                    teamA.add(users.get(i));
-                } else {
-                    teamB.add(users.get(i));
-                }
-            }
-
-
-            if (teamA.size() < teamB.size()) {
+            // Fill remaining slots with "Empty Player" placeholders
+            while (teamA.size() < 2) {
                 teamA.add("Empty Player");
-            } else if (teamB.size() < teamA.size()) {
+            }
+            while (teamB.size() < 2) {
                 teamB.add("Empty Player");
             }
 
+            // Log the teams separately for better clarity
+            LOGGER.info("Teams - TeamA: " + teamA + ", TeamB: " + teamB);
+
+            // Display teams
             displayTeam(teamA, teamAPanel);
             displayTeam(teamB, teamBPanel);
 
-            if (users.size() == maxPlayers && roomCreator.equals(username)) {
+            // Enable start game button if the room is full and the user is the creator
+            if ((teamA.size() + teamB.size()) == maxPlayers && roomCreator.equals(username)) {
                 startGameButton.setEnabled(true);
             } else {
                 startGameButton.setEnabled(false);
@@ -244,8 +253,10 @@ public class RoomView {
     }
 
     private void displayTeam(List<String> team, JPanel teamPanel) {
-        for (int i = 0; i < team.size(); i++) {
-            String user = team.get(i);
+        teamPanel.removeAll();
+        teamPanel.setLayout(new GridLayout(team.size(), 1, 0, 10)); // Use GridLayout for vertical stacking with some gap
+
+        for (String user : team) {
             String imagePath = "/data/boy.png";
             if (user.equals("Empty Player")) {
                 imagePath = "/data/nullplayer.png";
@@ -254,7 +265,7 @@ public class RoomView {
             JPanel userPanelItem = new JPanel();
             userPanelItem.setLayout(null);
             userPanelItem.setBackground(Color.decode("#f0f0f0"));
-            userPanelItem.setBounds(0, i * 58, 478, 58);
+            userPanelItem.setPreferredSize(new Dimension(478, 58));
 
             ImageIcon imageIcon = new ImageIcon(Objects.requireNonNull(getClass().getResource(imagePath)));
             JLabel userPic = new JLabel() {
@@ -296,9 +307,11 @@ public class RoomView {
 
             teamPanel.add(userPanelItem);
         }
+
         teamPanel.revalidate();
         teamPanel.repaint();
     }
+
 
     private void updateSendButtonState() {
         SwingUtilities.invokeLater(() -> {
