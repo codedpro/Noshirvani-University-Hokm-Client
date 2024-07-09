@@ -282,15 +282,19 @@ public class GameUI {
             String cardsMessage = cards.get(0);
             String[] cardList = cardsMessage.substring("DEAL_CARDS:[".length(), cardsMessage.length() - 1).split(", ");
 
+            handPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5)); // Adjust the layout for a single row
+
             for (String card : cardList) {
                 String trimmedCard = card.trim();
                 String imagePath = "/Cards/" + trimmedCard + ".png";
 
-                ImageIcon cardIcon = createImageIcon(imagePath);
+                ImageIcon cardIcon = createScaledImageIcon(imagePath, 30, 45); // Scale the card to a smaller size
                 if (cardIcon != null) {
                     JButton cardButton = new JButton(cardIcon);
                     cardButton.setActionCommand(trimmedCard);
                     cardButton.addActionListener(new CardButtonListener());
+                    cardButton.setBorderPainted(false); // Remove button border
+                    cardButton.setContentAreaFilled(false); // Remove button background
                     handPanel.add(cardButton);
                     handButtons.add(cardButton);
                 } else {
@@ -301,6 +305,18 @@ public class GameUI {
             handPanel.revalidate();
             handPanel.repaint();
         });
+    }
+
+    protected ImageIcon createScaledImageIcon(String path, int width, int height) {
+        java.net.URL imgURL = getClass().getResource(path);
+        if (imgURL != null) {
+            ImageIcon icon = new ImageIcon(imgURL);
+            Image img = icon.getImage().getScaledInstance(width, height, Image.SCALE_SMOOTH);
+            return new ImageIcon(img);
+        } else {
+            LOGGER.log(Level.WARNING, "Couldn't find file: " + path);
+            return null;
+        }
     }
 
     protected ImageIcon createImageIcon(String path) {
