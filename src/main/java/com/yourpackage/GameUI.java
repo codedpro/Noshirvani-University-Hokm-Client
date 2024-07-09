@@ -197,9 +197,9 @@ public class GameUI {
     private void handleTurn(String message) {
         String player = message.split(":")[1];
         isMyTurn = player.equals(username);
-        if (isMyTurn) {
-            JOptionPane.showMessageDialog(null, "It's your turn!", "Turn", JOptionPane.INFORMATION_MESSAGE);
-        }
+      //  if (isMyTurn) {
+        //    JOptionPane.showMessageDialog(null, "It's your turn!", "Turn", JOptionPane.INFORMATION_MESSAGE);
+        //}
     }
 
     private List<String> extractPlayerNames(String part) {
@@ -561,7 +561,7 @@ public class GameUI {
     private void handleHokmSelected(String message) {
         String selectedHokm = message.split(":")[1];
         currentSuit = selectedHokm;
-        JOptionPane.showMessageDialog(null, "Hokm selected: " + selectedHokm, "Hokm Selected", JOptionPane.INFORMATION_MESSAGE);
+    //    JOptionPane.showMessageDialog(null, "Hokm selected: " + selectedHokm, "Hokm Selected", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void handleRoundStart(String message) {
