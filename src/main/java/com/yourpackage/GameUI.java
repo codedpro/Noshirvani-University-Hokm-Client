@@ -10,6 +10,7 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,6 +34,9 @@ public class GameUI {
     private JPanel hokmSelectionPanel;
     private boolean isMyTurn = false;
     private String currentSuit = "";
+    private final Map<String, Long> receivedMessages = new HashMap<>();
+    private final long MESSAGE_TIMEOUT = 30000;
+    private final ReentrantLock lock = new ReentrantLock();
 
     private List<JLabel> playedCardLabels;
 
@@ -79,7 +83,7 @@ public class GameUI {
         teamBRoundWins.setBounds(20, 140, 150, 30);
         frame.add(teamBRoundWins);
 
-        playersPanel = new JPanel(null);
+        playersPanel = new JPanel(new GridBagLayout());
         playersPanel.setOpaque(false);
         playersPanel.setBounds(0, 0, 800, 600);
         frame.add(playersPanel);
@@ -114,55 +118,80 @@ public class GameUI {
                 while (true) {
                     Object received = in.readObject();
                     if (received instanceof String message) {
-                        LOGGER.info("Received message: " + message);
-                        if (message.startsWith("PLAYER_LIST:")) {
-                            String[] parts = message.split(":", 4);
-                            if (parts.length == 4) {
-                                String teamAMessage = parts[2].trim();
-                                String teamBMessage = parts[3].trim();
-                                LOGGER.info("Team A: " + teamAMessage + ", Team B: " + teamBMessage);
-                                updatePlayersList(teamAMessage, teamBMessage);
+                        long currentTime = System.currentTimeMillis();
+
+                        lock.lock();
+                        try {
+                            Iterator<Map.Entry<String, Long>> iterator = receivedMessages.entrySet().iterator();
+                            while (iterator.hasNext()) {
+                                Map.Entry<String, Long> entry = iterator.next();
+                                if (currentTime - entry.getValue() > MESSAGE_TIMEOUT) {
+                                    iterator.remove();
+                                }
                             }
-                        } else if (message.startsWith("CHAT:")) {
-                            chatPanel.updateChatArea(message.substring(5));
-                        } else if (message.startsWith("SCORE_UPDATE:")) {
-                            updateScores(message);
-                        } else if (message.startsWith("TURN_WINNER:")) {
-                            handleTurnWinner(message);
-                        } else if (message.startsWith("START_GAME:")) {
-                            handleStartGame(message);
-                        } else if (message.startsWith("MASTER_SELECTED:")) {
-                            String master = message.split(":")[1];
-                            currentSuit = master;
-                            LOGGER.info("Master is " + master);
-                        } else if (message.startsWith("DEAL_CARDS:")) {
-                            DealCards(Collections.singletonList(message));
-                        } else if (message.contains("SELECT_HOKM")) {
-                            showHokmSelection();
-                        } else if (message.startsWith("CARD_PLAYED:")) {
-                            handlePlayCard(message);
-                        } else if (message.startsWith("PLAYER_TURN:")) {
-                            handleTurn(message);
-                        } else if (message.startsWith("HOKM_SELECTED:")) {
-                            handleHokmSelected(message);
-                        } else if (message.startsWith("ROUND_START:")) {
-                            handleRoundStart(message);
-                        } else if (message.startsWith("ROUND_WINS_UPDATE:")) {
-                            handleRoundWinsUpdate(message);
-                        } else if (message.startsWith("TEAM_WINS_ROUND:")) {
-                            handleTeamWinsRound(message);
-                        } else if (message.startsWith("GAME_OVER:")) {
-                            handleGameOver(message);
-                        } else {
-                            LOGGER.info("Unknown message received");
-                            chatPanel.updateChatArea(message);
+
+                            if (receivedMessages.containsKey(message)) {
+                                continue;
+                            }
+
+                            receivedMessages.put(message, currentTime);
+                        } finally {
+                            lock.unlock();
                         }
+
+                        LOGGER.info("Received message: " + message);
+                        processMessage(message);
                     }
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Error in game message handling", e);
             }
         }).start();
+    }
+
+    private void processMessage(String message) throws IOException {
+        if (message.startsWith("PLAYER_LIST:")) {
+            String[] parts = message.split(":", 4);
+            if (parts.length == 4) {
+                String teamAMessage = parts[2].trim();
+                String teamBMessage = parts[3].trim();
+                LOGGER.info("Team A: " + teamAMessage + ", Team B: " + teamBMessage);
+                updatePlayersList(teamAMessage, teamBMessage);
+            }
+        } else if (message.startsWith("CHAT:")) {
+            chatPanel.updateChatArea(message.substring(5));
+        } else if (message.startsWith("SCORE_UPDATE:")) {
+            updateScores(message);
+        } else if (message.startsWith("TURN_WINNER:")) {
+            handleTurnWinner(message);
+        } else if (message.startsWith("START_GAME:")) {
+            handleStartGame(message);
+        } else if (message.startsWith("MASTER_SELECTED:")) {
+            String master = message.split(":")[1];
+            currentSuit = master;
+            LOGGER.info("Master is " + master);
+        } else if (message.startsWith("DEAL_CARDS:")) {
+            DealCards(Collections.singletonList(message));
+        } else if (message.contains("SELECT_HOKM")) {
+            showHokmSelection();
+        } else if (message.startsWith("CARD_PLAYED:")) {
+            handlePlayCard(message);
+        } else if (message.startsWith("PLAYER_TURN:")) {
+            handleTurn(message);
+        } else if (message.startsWith("HOKM_SELECTED:")) {
+            handleHokmSelected(message);
+        } else if (message.startsWith("ROUND_START:")) {
+            handleRoundStart(message);
+        } else if (message.startsWith("ROUND_WINS_UPDATE:")) {
+            handleRoundWinsUpdate(message);
+        } else if (message.startsWith("TEAM_WINS_ROUND:")) {
+            handleTeamWinsRound(message);
+        } else if (message.startsWith("GAME_OVER:")) {
+            handleGameOver(message);
+        } else {
+            LOGGER.info("Unknown message received");
+            chatPanel.updateChatArea(message);
+        }
     }
 
     private void handleTurn(String message) {
@@ -227,6 +256,7 @@ public class GameUI {
         });
     }
 
+
     private void handleStartGame(String message) throws IOException {
         String[] parts = message.split(":");
         List<String> teamA = List.of(parts[1].split(","));
@@ -254,26 +284,60 @@ public class GameUI {
         Arrays.fill(positions, "");
 
         if (teamA.contains(username)) {
-            positions[0] = username;
-            positions[2] = teamA.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
+            positions[3] = username;
+            positions[0] = teamA.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
             positions[1] = teamB.size() > 0 ? teamB.get(0) : "";
-            positions[3] = teamB.size() > 1 ? teamB.get(1) : "";
+            positions[2] = teamB.size() > 1 ? teamB.get(1) : "";
         } else if (teamB.contains(username)) {
-            positions[0] = username;
-            positions[2] = teamB.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
+            positions[3] = username;
+            positions[0] = teamB.stream().filter(p -> !p.equals(username)).findFirst().orElse("");
             positions[1] = teamA.size() > 0 ? teamA.get(0) : "";
-            positions[3] = teamA.size() > 1 ? teamA.get(1) : "";
+            positions[2] = teamA.size() > 1 ? teamA.get(1) : "";
         }
+
+        playersPanel.setLayout(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(55, 55, 55, 55); // Increased gap between objects
 
         for (int i = 0; i < positions.length; i++) {
             if (!positions[i].isEmpty()) {
                 String playerName = positions[i];
+
+                JPanel playerPanel = new JPanel();
+                playerPanel.setLayout(new BorderLayout());
+                playerPanel.setOpaque(false);
+
+                JLabel playerIcon = new JLabel(new ImageIcon(getClass().getResource("/data/boy.png")));
+                playerIcon.setHorizontalAlignment(JLabel.CENTER);
+                playerPanel.add(playerIcon, BorderLayout.CENTER);
+
                 JLabel playerLabel = new JLabel(playerName, SwingConstants.CENTER);
-                playerLabel.setBounds(i % 2 == 0 ? 350 : (i == 1 ? 700 : 20), i < 2 ? 50 : 500, 100, 30);
-                playersPanel.add(playerLabel);
+                playerPanel.add(playerLabel, BorderLayout.SOUTH);
+
+                switch (i) {
+                    case 0: // Top
+                        gbc.gridx = 1;
+                        gbc.gridy = 0;
+                        break;
+                    case 1: // Right
+                        gbc.gridx = 2;
+                        gbc.gridy = 1;
+                        break;
+                    case 2: // Left
+                        gbc.gridx = 0;
+                        gbc.gridy = 1;
+                        break;
+                    case 3: // Bottom
+                        gbc.gridx = 1;
+                        gbc.gridy = 2;
+                        break;
+                }
+
+                playersPanel.add(playerPanel, gbc);
             }
         }
     }
+
 
     private void DealCards(List<String> cards) {
         SwingUtilities.invokeLater(() -> {
@@ -282,19 +346,19 @@ public class GameUI {
             String cardsMessage = cards.get(0);
             String[] cardList = cardsMessage.substring("DEAL_CARDS:[".length(), cardsMessage.length() - 1).split(", ");
 
-            handPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5)); // Adjust the layout for a single row
+            handPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 5, 5));
 
             for (String card : cardList) {
                 String trimmedCard = card.trim();
                 String imagePath = "/Cards/" + trimmedCard + ".png";
 
-                ImageIcon cardIcon = createScaledImageIcon(imagePath, 30, 45); // Scale the card to a smaller size
+                ImageIcon cardIcon = createScaledImageIcon(imagePath, 30, 45);
                 if (cardIcon != null) {
                     JButton cardButton = new JButton(cardIcon);
                     cardButton.setActionCommand(trimmedCard);
                     cardButton.addActionListener(new CardButtonListener());
-                    cardButton.setBorderPainted(false); // Remove button border
-                    cardButton.setContentAreaFilled(false); // Remove button background
+                    cardButton.setBorderPainted(false);
+                    cardButton.setContentAreaFilled(false);
                     handPanel.add(cardButton);
                     handButtons.add(cardButton);
                 } else {
@@ -359,28 +423,24 @@ public class GameUI {
 
 
     private boolean canPlayCard(String card) {
-        // Extract the suit of the card the player wants to play
         String[] cardParts = card.split("-");
         String cardSuit = cardParts[0];
 
-        // If playedCardLabels is empty, it's the player's turn to start
         if (playedCardLabels.isEmpty()) {
             return true;
         }
 
-        // Extract the suit of the first played card
+
         String[] firstCardParts = playedCardLabels.get(0).getText().split("-");
         String firstCardSuit = firstCardParts[0];
 
-        // Check if the player has any cards of the first played suit
         boolean hasSuit = handButtons.stream()
                 .anyMatch(button -> button.getActionCommand().startsWith(firstCardSuit));
 
         if (hasSuit) {
-            // If the player has cards of the first suit, they can only play cards of that suit
+
             return cardSuit.equals(firstCardSuit);
         } else {
-            // If the player does not have any cards of the first suit, they can play any card
             return true;
         }
     }
@@ -391,23 +451,21 @@ public class GameUI {
         SwingUtilities.invokeLater(() -> {
             hokmSelectionPanel.setVisible(true);
 
-            // Disable all hand buttons while Hokm selection is ongoing
+
             for (JButton button : handButtons) {
-                button.setEnabled(false);
+                button.setEnabled(true);
             }
 
-            // Remove any previous components from the panel
             hokmSelectionPanel.removeAll();
 
-            // Add suit selection buttons
             String[] suits = {"Hearts", "Diamonds", "Clubs", "Spades"};
             for (String suit : suits) {
                 JButton suitButton = new JButton(suit);
-                suitButton.addActionListener(e -> selectHokm(suit)); // Action listener to select Hokm suit
+                suitButton.addActionListener(e -> selectHokm(suit));
                 hokmSelectionPanel.add(suitButton);
             }
 
-            // Ensure the panel updates correctly
+
             hokmSelectionPanel.revalidate();
             hokmSelectionPanel.repaint();
         });
@@ -416,17 +474,14 @@ public class GameUI {
     private void selectHokm(String suit) {
         LOGGER.info("Selected Hokm suit: " + suit);
 
-        // Hide Hokm selection panel once a suit is selected
         hokmSelectionPanel.setVisible(false);
 
-        // Re-enable hand buttons after Hokm selection
         SwingUtilities.invokeLater(() -> {
             for (JButton button : handButtons) {
                 button.setEnabled(true);
             }
         });
 
-        // Send selected Hokm suit to the server if allowed (e.g., if the player is the room creator)
         try {
             if (username.equals(currentSuit)) {
                 out.writeObject("SET_HOKM:" + roomCreator + ":" + suit);
@@ -458,32 +513,30 @@ public class GameUI {
 
     private void displayPlayedCard(String player, String card) {
         SwingUtilities.invokeLater(() -> {
-            JLabel cardLabel = new JLabel(card);
-            int x = 0, y = 0;
+            JLabel cardLabel = new JLabel();
+            int cardWidth = 30;
+            int cardHeight = 45;
 
-            if (teamA.contains(player) || teamB.contains(player)) {
-                int index = (teamA.contains(player) ? teamA.indexOf(player) : teamB.indexOf(player)) % 4;
-                switch (index) {
-                    case 0 -> {
-                        x = 350;
-                        y = 400;
-                    }
-                    case 1 -> {
-                        x = 700;
-                        y = 250;
-                    }
-                    case 2 -> {
-                        x = 350;
-                        y = 100;
-                    }
-                    case 3 -> {
-                        x = 0;
-                        y = 250;
-                    }
-                }
+            String imagePath = "/Cards/" + card + ".png";
+            ImageIcon cardIcon = createScaledImageIcon(imagePath, cardWidth, cardHeight);
+            if (cardIcon != null) {
+                cardLabel.setIcon(cardIcon);
             }
 
-            cardLabel.setBounds(x, y, 100, 30);
+            cardLabel.setText(card);
+            cardLabel.setForeground(new Color(0, 0, 0, 0));
+            cardLabel.setToolTipText(card);
+
+            // Set layout to null and manually position the cards in the middle
+            playersPanel.setLayout(null);
+            int panelWidth = playersPanel.getWidth();
+            int panelHeight = playersPanel.getHeight();
+
+            int cardX = (panelWidth / 2) - (cardWidth / 2);
+            int cardY = (panelHeight / 2) - (cardHeight / 2) - 100 +  (playedCardLabels.size() * (cardHeight + 10)); // Adjust position for each card
+
+            cardLabel.setBounds(cardX, cardY, cardWidth, cardHeight);
+
             playersPanel.add(cardLabel);
             playedCardLabels.add(cardLabel);
             playersPanel.revalidate();

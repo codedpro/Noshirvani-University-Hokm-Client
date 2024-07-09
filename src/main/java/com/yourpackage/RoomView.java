@@ -160,7 +160,7 @@ public class RoomView {
                     while (true) {
                         Object received = in.readObject();
                         if (received instanceof String message) {
-                            LOGGER.info("Received message: " + message);
+                            LOGGER.info("Received messageeeee: " + message);
                             if (message.startsWith("START_GAME:")) {
 
                                 String[] parts = message.split(":");

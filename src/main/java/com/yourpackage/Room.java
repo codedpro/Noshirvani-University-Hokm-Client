@@ -3,10 +3,7 @@ package com.yourpackage;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -16,6 +13,7 @@ public class Room implements Serializable {
 
     private final String creator;
     private final List<Player> players;
+    private final Set<String> broadcastedMessages = new HashSet<>();
     private transient List<ObjectOutputStream> clientStreams;
     private final int maxPlayers;
     private boolean isGameStarted;
@@ -279,17 +277,26 @@ public class Room implements Serializable {
     }
 
     public synchronized void broadcastMessage(String message) {
-        List<ObjectOutputStream> closedStreams = new ArrayList<>();
+        if (broadcastedMessages.contains(message)) {
+            LOGGER.log(Level.INFO, "Duplicate message detected, skipping broadcast: " + message);
+            return;
+        }
+
+        broadcastedMessages.add(message);
+
+        List<ObjectOutputStream> failedStreams = new ArrayList<>();
+
         for (ObjectOutputStream client : clientStreams) {
             try {
                 client.writeObject(message);
                 client.flush();
             } catch (IOException e) {
-                closedStreams.add(client);
+                failedStreams.add(client);
                 LOGGER.log(Level.SEVERE, "Error broadcasting message", e);
             }
         }
-        clientStreams.removeAll(closedStreams);
+
+        clientStreams.removeAll(failedStreams);
     }
 
     public synchronized void broadcastUserList() {
