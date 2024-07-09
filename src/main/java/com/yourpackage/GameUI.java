@@ -35,7 +35,7 @@ public class GameUI {
     private boolean isMyTurn = false;
     private String currentSuit = "";
     private final Map<String, Long> receivedMessages = new HashMap<>();
-    private final long MESSAGE_TIMEOUT = 30000;
+    private final long MESSAGE_TIMEOUT = 4000;
     private final ReentrantLock lock = new ReentrantLock();
 
     private List<JLabel> playedCardLabels;
